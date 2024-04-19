@@ -3,6 +3,7 @@ package com.reactive.model;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
 @Table("book")
@@ -10,7 +11,8 @@ import org.springframework.data.relational.core.mapping.Table;
 @NoArgsConstructor
 public class Book {
     @Id
-    private int bookId;
+    @Column("bookId")
+    private Integer bookId;
     private String name;
     private String author;
 }

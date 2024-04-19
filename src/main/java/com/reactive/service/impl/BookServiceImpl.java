@@ -1,46 +1,58 @@
 package com.reactive.service.impl;
 
-import com.reactive.BookRepository;
 import com.reactive.model.Book;
+import com.reactive.repository.BookRepository;
+import com.reactive.repository.ReactiveBookRepository;
 import com.reactive.service.BookService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
+
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class BookServiceImpl implements BookService {
 
+    private final ReactiveBookRepository reactiveBookRepository;
     private final BookRepository bookRepository;
 
     @Override
     public Mono<Book> create(Book book) {
-        return bookRepository.save(book);
+        log.info(Thread.currentThread().getName());
+        return reactiveBookRepository.save(book).doOnNext(data-> log.info(Thread.currentThread().getName()));
     }
 
     @Override
-    public Flux<Book> getAll() {
+    public Flux<Book> getAllReactive() {
+        return reactiveBookRepository.findAll();
+    }
+
+    @Override
+    public List<Book> getAll() {
         return bookRepository.findAll();
     }
 
     @Override
     public Mono<Book> get(int bookId) {
-        return bookRepository.findById(bookId);
+        return reactiveBookRepository.findById(bookId);
     }
 
     @Override
     public Mono<Book> update(Book book, int bookId) {
-       return bookRepository.findById(bookId).flatMap(update->{
-            update.setName(book.getName());
+       return reactiveBookRepository.findById(bookId).flatMap(update->{
+           update.setName(book.getName());
             update.setAuthor(book.getAuthor());
-            return bookRepository.save(update);
+            return reactiveBookRepository.save(update).log();
         });
     }
 
     @Override
     public Mono<Void> delete(int bookId) {
-        return bookRepository.deleteById(bookId);
+        return reactiveBookRepository.deleteById(bookId);
     }
 
     @Override
