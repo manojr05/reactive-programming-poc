@@ -1,0 +1,715 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jmeterTestPlan version="1.2" properties="5.0" jmeter="5.6.2">
+  <hashTree>
+    <TestPlan guiclass="TestPlanGui" testclass="TestPlan" testname="Amazon SmartConnect" enabled="true">
+      <boolProp name="TestPlan.functional_mode">false</boolProp>
+      <boolProp name="TestPlan.tearDown_on_shutdown">false</boolProp>
+      <boolProp name="TestPlan.serialize_threadgroups">false</boolProp>
+      <elementProp name="TestPlan.user_defined_variables" elementType="Arguments" guiclass="ArgumentsPanel" testclass="Arguments" testname="User Defined Variables" enabled="true">
+        <collectionProp name="Arguments.arguments"/>
+      </elementProp>
+    </TestPlan>
+    <hashTree>
+      <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="HTTP Header Manager" enabled="true">
+        <collectionProp name="HeaderManager.headers">
+          <elementProp name="" elementType="Header">
+            <stringProp name="Header.name">x-amz-date</stringProp>
+            <stringProp name="Header.value">${x_amz_date}</stringProp>
+          </elementProp>
+          <elementProp name="" elementType="Header">
+            <stringProp name="Header.name">Authorization</stringProp>
+            <stringProp name="Header.value">${aws_authorization}</stringProp>
+          </elementProp>
+          <elementProp name="" elementType="Header">
+            <stringProp name="Header.name">Content-Type</stringProp>
+            <stringProp name="Header.value">application/json</stringProp>
+          </elementProp>
+        </collectionProp>
+      </HeaderManager>
+      <hashTree/>
+      <Arguments guiclass="ArgumentsPanel" testclass="Arguments" testname="AWS Variables" enabled="true">
+        <collectionProp name="Arguments.arguments">
+          <elementProp name="aws_access_key" elementType="Argument">
+            <stringProp name="Argument.name">aws_access_key</stringProp>
+            <stringProp name="Argument.value">AKIAZ6DE7NC6DSOTUAOT</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="aws_secret_key" elementType="Argument">
+            <stringProp name="Argument.name">aws_secret_key</stringProp>
+            <stringProp name="Argument.value">Fnq1A7/oV5fIlPUX4OghcTe64nLT5d/vIjkOhC1s</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="aws_host" elementType="Argument">
+            <stringProp name="Argument.name">aws_host</stringProp>
+            <stringProp name="Argument.value">0j8ddb7uj2.execute-api.eu-west-1.amazonaws.com</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="aws_service_name" elementType="Argument">
+            <stringProp name="Argument.name">aws_service_name</stringProp>
+            <stringProp name="Argument.value">execute-api</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="aws_region" elementType="Argument">
+            <stringProp name="Argument.name">aws_region</stringProp>
+            <stringProp name="Argument.value">eu-west-1</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+        </collectionProp>
+      </Arguments>
+      <hashTree/>
+      <JSR223PreProcessor guiclass="TestBeanGUI" testclass="JSR223PreProcessor" testname="JSR223 PreProcessor" enabled="true">
+        <stringProp name="cacheKey">true</stringProp>
+        <stringProp name="filename"></stringProp>
+        <stringProp name="parameters"></stringProp>
+        <stringProp name="script">import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
+import java.security.InvalidKeyException
+import java.security.MessageDigest
+import groovy.json.JsonSlurper
+import java.text.SimpleDateFormat
+
+
+//Defined in User Defined Variables
+def access_key = vars.get(&quot;aws_access_key&quot;)
+def secret_key = vars.get(&quot;aws_secret_key&quot;)
+def service = vars.get(&quot;aws_service_name&quot;)
+def host = vars.get(&quot;aws_host&quot;)
+def region = vars.get(&quot;aws_region&quot;)
+
+//Obtain data form the Http Request Sampler
+def method = sampler.getMethod()
+def url = sampler.getUrl()
+def req_path = url.getPath()
+def req_query_string = orderQuery(url)
+def request_parameters = &apos;&apos;;
+
+sampler.getArguments().each {arg -&gt;
+    request_parameters = arg.getStringValue().substring(1)
+}
+
+//Create the variable x-amz-date 
+def now = new Date()
+def amzFormat = new SimpleDateFormat( &quot;yyyyMMdd&apos;T&apos;HHmmss&apos;Z&apos;&quot; )
+def stampFormat = new SimpleDateFormat( &quot;yyyyMMdd&quot; )
+amzFormat.setTimeZone(TimeZone.getTimeZone(&quot;UTC&quot;));  //server timezone
+def amzDate = amzFormat.format(now)
+def dateStamp = stampFormat.format(now)
+vars.put(&quot;x_amz_date&quot;, amzDate)
+
+
+//Create a Canonical Request
+def canonical_uri = req_path
+def canonical_querystring = req_query_string
+def canonical_headers = &quot;host:&quot; + host + &quot;\n&quot; + &quot;x-amz-date:&quot; + amzDate + &quot;\n&quot;
+def signed_headers = &quot;host;x-amz-date&quot;
+def payload_hash = getHexDigest(request_parameters)
+def canonical_request = method + &quot;\n&quot; + canonical_uri + &quot;\n&quot; + canonical_querystring + &quot;\n&quot; + canonical_headers + &quot;\n&quot; + signed_headers + &quot;\n&quot; + payload_hash
+
+
+//Create the String to Sign
+def algorithm = &quot;AWS4-HMAC-SHA256&quot;
+def credential_scope = dateStamp + &quot;/&quot; + region + &quot;/&quot; + service + &quot;/&quot; + &quot;aws4_request&quot;
+def hash_canonical_request = getHexDigest(canonical_request)
+def string_to_sign = algorithm + &quot;\n&quot; +  amzDate + &quot;\n&quot; +  credential_scope + &quot;\n&quot; +  hash_canonical_request
+
+//Calculate the String to Sign
+def signing_key = getSignatureKey(secret_key, dateStamp, region, service)
+def signature = hmac_sha256Hex(signing_key, string_to_sign)
+
+//Add Signing information to Variable
+def authorization_header = algorithm + &quot; &quot; + &quot;Credential=&quot; + access_key + &quot;/&quot; + credential_scope + &quot;, &quot; +  &quot;SignedHeaders=&quot; + signed_headers + &quot;, &quot; + &quot;Signature=&quot; + signature
+vars.put(&quot;aws_authorization&quot;, authorization_header)
+
+
+def hmac_sha256(secretKey, data) {
+    Mac mac = Mac.getInstance(&quot;HmacSHA256&quot;)
+    SecretKeySpec secretKeySpec = new SecretKeySpec(secretKey, &quot;HmacSHA256&quot;)
+    mac.init(secretKeySpec)
+    byte[] digest = mac.doFinal(data.getBytes())
+    return digest
+}
+
+def hmac_sha256Hex(secretKey, data) {
+    def result = hmac_sha256(secretKey, data)
+    return result.encodeHex()
+}
+
+def getSignatureKey(key, dateStamp, regionName, serviceName) {
+    def kDate = hmac_sha256((&quot;AWS4&quot; + key).getBytes(), dateStamp)
+    def kRegion = hmac_sha256(kDate, regionName)
+    def kService = hmac_sha256(kRegion, serviceName)
+    def kSigning = hmac_sha256(kService, &quot;aws4_request&quot;)
+    return kSigning
+}
+
+def getHexDigest(text) {
+    log.info(&quot;text:&quot;+text)
+    def md = MessageDigest.getInstance(&quot;SHA-256&quot;)
+    md.update(text.getBytes())
+    return md.digest().encodeHex()
+}
+
+public static String orderQuery(URL url) throws UnsupportedEncodingException {
+
+    def orderQueryString = &quot;&quot;;
+    Map&lt;String, String&gt; queryPairs = new LinkedHashMap&lt;&gt;();
+    String queryParams = url.getQuery();
+
+    if (queryParams != null) {
+        String[] pairs = queryParams.split(&quot;&amp;&quot;);
+    
+        for (String pair : pairs) {
+            int idx = pair.indexOf(&quot;=&quot;);
+            queryPairs.put(URLDecoder.decode(pair.substring(0, idx), &quot;UTF-8&quot;), URLDecoder.decode(pair.substring(idx + 1), &quot;UTF-8&quot;));
+        }
+        def orderQueryArray = new TreeMap&lt;String, String&gt;(queryPairs);
+        orderQueryString  = urlEncodeUTF8(orderQueryArray)
+    }
+    return orderQueryString;
+}
+
+public static String urlEncodeUTF8(String s) {
+    try {
+        return URLEncoder.encode(s, &quot;UTF-8&quot;);
+    } catch (UnsupportedEncodingException e) {
+        throw new UnsupportedOperationException(e);
+    }
+}
+
+public static String urlEncodeUTF8(Map&lt;?,?&gt; map) {
+    StringBuilder sb = new StringBuilder();
+    for (Map.Entry&lt;?,?&gt; entry : map.entrySet()) {
+        if (sb.length() &gt; 0) {
+            sb.append(&quot;&amp;&quot;);
+        }
+        sb.append(String.format(&quot;%s=%s&quot;,
+            urlEncodeUTF8(entry.getKey().toString()),
+            urlEncodeUTF8(entry.getValue().toString())
+        ));
+    }
+    return sb.toString();       
+}
+ </stringProp>
+        <stringProp name="scriptLanguage">groovy</stringProp>
+      </JSR223PreProcessor>
+      <hashTree/>
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="Dynamic AWS SigV4" enabled="true">
+        <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="Loop Controller" enabled="true">
+          <intProp name="LoopController.loops">-1</intProp>
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+        </elementProp>
+        <stringProp name="ThreadGroup.num_threads">100</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">1</stringProp>
+        <boolProp name="ThreadGroup.delayedStart">false</boolProp>
+        <boolProp name="ThreadGroup.scheduler">false</boolProp>
+        <stringProp name="ThreadGroup.duration"></stringProp>
+        <stringProp name="ThreadGroup.delay"></stringProp>
+        <boolProp name="ThreadGroup.same_user_on_next_iteration">false</boolProp>
+      </ThreadGroup>
+      <hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="getSkuListingDetails" enabled="false">
+          <boolProp name="HTTPSampler.postBodyRaw">false</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="User Defined Variables" enabled="true">
+            <collectionProp name="Arguments.arguments"/>
+          </elementProp>
+          <stringProp name="HTTPSampler.domain">${aws_host}</stringProp>
+          <stringProp name="HTTPSampler.protocol">https</stringProp>
+          <stringProp name="HTTPSampler.path">/prod/v1/merchants/vezza-4631/skus/44394127687973</stringProp>
+          <stringProp name="HTTPSampler.method">GET</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+          <boolProp name="HTTPSampler.BROWSER_COMPATIBLE_MULTIPART">false</boolProp>
+          <boolProp name="HTTPSampler.image_parser">false</boolProp>
+          <boolProp name="HTTPSampler.concurrentDwn">false</boolProp>
+          <stringProp name="HTTPSampler.concurrentPool">6</stringProp>
+          <boolProp name="HTTPSampler.md5">false</boolProp>
+          <intProp name="HTTPSampler.ipSourceType">0</intProp>
+        </HTTPSamplerProxy>
+        <hashTree/>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="updatePricingInfo" enabled="false">
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&#xd;
+  &quot;maxRetailPrice&quot;: {&#xd;
+    &quot;currency&quot;: &quot;INR&quot;,&#xd;
+    &quot;value&quot;: 100&#xd;
+  },&#xd;
+  &quot;sellingPrice&quot;: {&#xd;
+    &quot;currency&quot;: &quot;INR&quot;,&#xd;
+    &quot;value&quot;: 100&#xd;
+  },&#xd;
+  &quot;minSellerAllowedPrice&quot;: {&#xd;
+    &quot;currency&quot;: &quot;INR&quot;,&#xd;
+    &quot;value&quot;: 100&#xd;
+  },&#xd;
+  &quot;maxSellerAllowedPrice&quot;: {&#xd;
+    &quot;currency&quot;: &quot;INR&quot;,&#xd;
+    &quot;value&quot;: 100&#xd;
+  }&#xd;
+}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <stringProp name="HTTPSampler.domain">${aws_host}</stringProp>
+          <stringProp name="HTTPSampler.protocol">https</stringProp>
+          <stringProp name="HTTPSampler.path">/prod/v1/merchants/vezza-4631/skus/44394127687973/prices?marketplaceName=SHOPIFY_IN&amp;channelName=SHOPIFY</stringProp>
+          <stringProp name="HTTPSampler.method">PUT</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+          <boolProp name="HTTPSampler.BROWSER_COMPATIBLE_MULTIPART">false</boolProp>
+          <boolProp name="HTTPSampler.image_parser">false</boolProp>
+          <boolProp name="HTTPSampler.concurrentDwn">false</boolProp>
+          <stringProp name="HTTPSampler.concurrentPool">6</stringProp>
+          <boolProp name="HTTPSampler.md5">false</boolProp>
+          <intProp name="HTTPSampler.ipSourceType">0</intProp>
+        </HTTPSamplerProxy>
+        <hashTree/>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="createPackages" enabled="false">
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&#xd;
+    &quot;locationId&quot;: &quot;61775970597&quot;,&#xd;
+    &quot;merchantId&quot;: &quot;vezza-4631&quot;,&#xd;
+    &quot;orderId&quot;: &quot;5820702884133&quot;,&#xd;
+    &quot;packageInfo&quot;: {&#xd;
+        &quot;id&quot;: &quot;id&quot;,&#xd;
+        &quot;length&quot;: {&#xd;
+            &quot;value&quot;: 1.1,&#xd;
+            &quot;unit&quot;: &quot;CM&quot;&#xd;
+        },&#xd;
+        &quot;width&quot;: {&#xd;
+            &quot;value&quot;: 1.1,&#xd;
+            &quot;unit&quot;: &quot;CM&quot;&#xd;
+        },&#xd;
+        &quot;height&quot;: {&#xd;
+            &quot;value&quot;: 1.1,&#xd;
+            &quot;unit&quot;: &quot;CM&quot;&#xd;
+        },&#xd;
+        &quot;weight&quot;: {&#xd;
+            &quot;value&quot;: 1,&#xd;
+            &quot;unit&quot;: &quot;kilograms&quot;&#xd;
+        },&#xd;
+        &quot;lineItems&quot;: [&#xd;
+            {&#xd;
+                &quot;id&quot;: &quot;15153643356453&quot;,&#xd;
+                &quot;numberOfUnits&quot;: 1,&#xd;
+                &quot;merchantSku&quot;: &quot;44295162102053&quot;&#xd;
+            }&#xd;
+        ]&#xd;
+    }&#xd;
+}&#xd;
+</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <stringProp name="HTTPSampler.domain">${aws_host}</stringProp>
+          <stringProp name="HTTPSampler.protocol">https</stringProp>
+          <stringProp name="HTTPSampler.path">/prod/v1/orders/cf2a5fb0-260d-4537-b47f-2e50cdd9bb16/packages?marketplaceName=SHOPIFY_IN&amp;channelName=SHOPIFY</stringProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+          <boolProp name="HTTPSampler.BROWSER_COMPATIBLE_MULTIPART">false</boolProp>
+          <boolProp name="HTTPSampler.image_parser">false</boolProp>
+          <boolProp name="HTTPSampler.concurrentDwn">false</boolProp>
+          <stringProp name="HTTPSampler.concurrentPool">6</stringProp>
+          <boolProp name="HTTPSampler.md5">false</boolProp>
+          <intProp name="HTTPSampler.ipSourceType">0</intProp>
+        </HTTPSamplerProxy>
+        <hashTree/>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="retrieveShippingServices" enabled="false">
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&#xd;
+    &quot;locationId&quot;: &quot;61775970597&quot;,&#xd;
+    &quot;merchantId&quot;: &quot;vezza-4631&quot;,&#xd;
+    &quot;orderId&quot;: &quot;5820702884133&quot;,&#xd;
+    &quot;shipmentId&quot;: &quot;cf2a5fb0-260d-4537-b47f-2e50cdd9bb16&quot;,&#xd;
+    &quot;shippingType&quot;: &quot;Marketplace&quot;,&#xd;
+    &quot;packageList&quot;: [&#xd;
+        {&#xd;
+            &quot;id&quot;: &quot;id&quot;,&#xd;
+            &quot;length&quot;: {&#xd;
+                &quot;value&quot;: 1.1,&#xd;
+                &quot;unit&quot;: &quot;CM&quot;&#xd;
+            },&#xd;
+            &quot;width&quot;: {&#xd;
+                &quot;value&quot;: 1.1,&#xd;
+                &quot;unit&quot;: &quot;CM&quot;&#xd;
+            },&#xd;
+            &quot;height&quot;: {&#xd;
+                &quot;value&quot;: 1.1,&#xd;
+                &quot;unit&quot;: &quot;CM&quot;&#xd;
+            },&#xd;
+            &quot;weight&quot;: {&#xd;
+                &quot;value&quot;: 1,&#xd;
+                &quot;unit&quot;: &quot;kilograms&quot;&#xd;
+            },&#xd;
+            &quot;lineItems&quot;: [&#xd;
+                {&#xd;
+	               &quot;id&quot;: &quot;15153643356453&quot;,&#xd;
+	               &quot;numberOfUnits&quot;: 1,&#xd;
+	               &quot;merchantSku&quot;: &quot;44295162102053&quot;&#xd;
+            	 }&#xd;
+            ]&#xd;
+        }&#xd;
+    ]&#xd;
+}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <stringProp name="HTTPSampler.domain">${aws_host}</stringProp>
+          <stringProp name="HTTPSampler.protocol">https</stringProp>
+          <stringProp name="HTTPSampler.path">/prod/v1/orders/cf2a5fb0-260d-4537-b47f-2e50cdd9bb16/shipping-services?marketplaceName=SHOPIFY_IN&amp;channelName=SHOPIFY</stringProp>
+          <stringProp name="HTTPSampler.method">PUT</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+          <boolProp name="HTTPSampler.BROWSER_COMPATIBLE_MULTIPART">false</boolProp>
+          <boolProp name="HTTPSampler.image_parser">false</boolProp>
+          <boolProp name="HTTPSampler.concurrentDwn">false</boolProp>
+          <stringProp name="HTTPSampler.concurrentPool">6</stringProp>
+          <boolProp name="HTTPSampler.md5">false</boolProp>
+          <intProp name="HTTPSampler.ipSourceType">0</intProp>
+        </HTTPSamplerProxy>
+        <hashTree/>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="getInvoice" enabled="true">
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&#xd;
+    &quot;locationId&quot;: &quot;61775970597&quot;,&#xd;
+    &quot;merchantId&quot;: &quot;vezza-4631&quot;,&#xd;
+    &quot;lineItemsList&quot;: [&#xd;
+        {&#xd;
+            &quot;id&quot;: &quot;15153643356453&quot;,&#xd;
+            &quot;numberOfUnits&quot;: 1,&#xd;
+            &quot;merchantSku&quot;: &quot;44295162102053&quot;&#xd;
+        }&#xd;
+    ]&#xd;
+}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <stringProp name="HTTPSampler.domain">${aws_host}</stringProp>
+          <stringProp name="HTTPSampler.protocol">https</stringProp>
+          <stringProp name="HTTPSampler.path">/prod/v1/orders/cf2a5fb0-260d-4537-b47f-2e50cdd9bb16/packages/1/invoice?marketplaceName=SHOPIFY_IN&amp;channelName=SHOPIFY</stringProp>
+          <stringProp name="HTTPSampler.method">PUT</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+          <boolProp name="HTTPSampler.BROWSER_COMPATIBLE_MULTIPART">false</boolProp>
+          <boolProp name="HTTPSampler.image_parser">false</boolProp>
+          <boolProp name="HTTPSampler.concurrentDwn">false</boolProp>
+          <stringProp name="HTTPSampler.concurrentPool">6</stringProp>
+          <boolProp name="HTTPSampler.md5">false</boolProp>
+          <intProp name="HTTPSampler.ipSourceType">0</intProp>
+        </HTTPSamplerProxy>
+        <hashTree/>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="generateShiplabel" enabled="false">
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&#xd;
+    &quot;locationId&quot;: &quot;61775970597&quot;,&#xd;
+    &quot;merchantId&quot;: &quot;vezza-4631&quot;,&#xd;
+    &quot;orderId&quot;: &quot;5820702884133&quot;,&#xd;
+    &quot;shipmentId&quot;: &quot;cf2a5fb0-260d-4537-b47f-2e50cdd9bb16&quot;,&#xd;
+    &quot;packageInfo&quot;: {&#xd;
+        &quot;id&quot;: &quot;id&quot;,&#xd;
+        &quot;length&quot;: {&#xd;
+            &quot;value&quot;: 0.1,&#xd;
+            &quot;unit&quot;: &quot;CM&quot;&#xd;
+        },&#xd;
+        &quot;width&quot;: {&#xd;
+            &quot;value&quot;: 1.1,&#xd;
+            &quot;unit&quot;: &quot;CM&quot;&#xd;
+        },&#xd;
+        &quot;height&quot;: {&#xd;
+            &quot;value&quot;: 1.1,&#xd;
+            &quot;unit&quot;: &quot;CM&quot;&#xd;
+        },&#xd;
+        &quot;weight&quot;: {&#xd;
+            &quot;value&quot;: 1.1,&#xd;
+            &quot;unit&quot;: &quot;kilograms&quot;&#xd;
+        },&#xd;
+        &quot;lineItems&quot;: [&#xd;
+            {&#xd;
+     	     &quot;id&quot;: &quot;15153643356453&quot;,&#xd;
+	          &quot;numberOfUnits&quot;: 1,&#xd;
+            	&quot;merchantSku&quot;: &quot;44295162102053&quot;&#xd;
+        	  }&#xd;
+        ]&#xd;
+    },&#xd;
+    &quot;paymentInfo&quot;: {&#xd;
+        &quot;cashOnDelivery&quot;: true,&#xd;
+        &quot;totalAmount&quot;: {&#xd;
+            &quot;value&quot;: 1.3,&#xd;
+            &quot;currency&quot;: &quot;INR&quot;&#xd;
+        },&#xd;
+        &quot;balanceDueAmount&quot;: {&#xd;
+            &quot;value&quot;: 1.3,&#xd;
+            &quot;currency&quot;: &quot;INR&quot;&#xd;
+        },&#xd;
+        &quot;taxTotalAmount&quot;: {&#xd;
+            &quot;value&quot;: 1.3,&#xd;
+            &quot;currency&quot;: &quot;INR&quot;&#xd;
+        }&#xd;
+    },&#xd;
+    &quot;priority&quot;: false,&#xd;
+    &quot;shippingServiceOffer&quot;: {&#xd;
+        &quot;id&quot;: &quot;43&quot;,&#xd;
+        &quot;shipBy&quot;: &quot;MARKETPLACE&quot;,&#xd;
+        &quot;shippingServiceId&quot;: &quot;anyId&quot;,&#xd;
+        &quot;shippingServiceName&quot;: &quot;Delhivery Surface Surface&quot;,&#xd;
+        &quot;carrierId&quot;: &quot;43&quot;,&#xd;
+        &quot;carrierName&quot;: &quot;DTDC Surface&quot;,&#xd;
+        &quot;promise&quot;: {&#xd;
+            &quot;deliveryWindow&quot;: {&#xd;
+                &quot;startTime&quot;: 1234578,&#xd;
+                &quot;endTime&quot;: 35694567&#xd;
+            },&#xd;
+            &quot;pickupWindow&quot;: {&#xd;
+                &quot;startTime&quot;: 1234578,&#xd;
+                &quot;endTime&quot;: 35694567&#xd;
+            }&#xd;
+        },&#xd;
+        &quot;totalCharge&quot;: {&#xd;
+            &quot;value&quot;: 112.34,&#xd;
+            &quot;currency&quot;: &quot;INR&quot;&#xd;
+        }&#xd;
+    },&#xd;
+    &quot;locationTimezone&quot;: &quot;IND&quot;,&#xd;
+    &quot;printerResolution&quot;: 1,&#xd;
+    &quot;shipLabelFormat&quot;: &quot;PDF&quot;,&#xd;
+    &quot;returnAddress&quot;: {&#xd;
+        &quot;name&quot;: &quot;Yug Soni&quot;,&#xd;
+        &quot;addressLine1&quot;: &quot;&quot;,&#xd;
+        &quot;addressLine2&quot;: &quot;&quot;,&#xd;
+        &quot;addressLine3&quot;: &quot;&quot;,&#xd;
+        &quot;city&quot;: &quot;&quot;,&#xd;
+        &quot;state&quot;: &quot;&quot;,&#xd;
+        &quot;countryCode&quot;: &quot;&quot;,&#xd;
+        &quot;postalCode&quot;: &quot;&quot;&#xd;
+    }&#xd;
+}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <stringProp name="HTTPSampler.domain">${aws_host}</stringProp>
+          <stringProp name="HTTPSampler.protocol">https</stringProp>
+          <stringProp name="HTTPSampler.path">/prod/v1/orders/cf2a5fb0-260d-4537-b47f-2e50cdd9bb16/packages/id/ship-label?marketplaceName=SHOPIFY_IN&amp;channelName=SHOPIFY&amp;operation=create</stringProp>
+          <stringProp name="HTTPSampler.method">PUT</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+          <boolProp name="HTTPSampler.BROWSER_COMPATIBLE_MULTIPART">false</boolProp>
+          <boolProp name="HTTPSampler.image_parser">false</boolProp>
+          <boolProp name="HTTPSampler.concurrentDwn">false</boolProp>
+          <stringProp name="HTTPSampler.concurrentPool">6</stringProp>
+          <boolProp name="HTTPSampler.md5">false</boolProp>
+          <intProp name="HTTPSampler.ipSourceType">0</intProp>
+        </HTTPSamplerProxy>
+        <hashTree/>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="updatePackages" enabled="false">
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&#xd;
+    &quot;locationId&quot;: &quot;61775970597&quot;,&#xd;
+    &quot;merchantId&quot;: &quot;vezza-4631&quot;,&#xd;
+    &quot;orderId&quot;: &quot;5820702884133&quot;,&#xd;
+    &quot;packageInfo&quot;: {&#xd;
+        &quot;id&quot;: &quot;id&quot;,&#xd;
+        &quot;length&quot;: {&#xd;
+            &quot;value&quot;: 1.1,&#xd;
+            &quot;unit&quot;: &quot;CM&quot;&#xd;
+        },&#xd;
+        &quot;width&quot;: {&#xd;
+            &quot;value&quot;: 1.1,&#xd;
+            &quot;unit&quot;: &quot;CM&quot;&#xd;
+        },&#xd;
+        &quot;height&quot;: {&#xd;
+            &quot;value&quot;: 1.1,&#xd;
+            &quot;unit&quot;: &quot;CM&quot;&#xd;
+        },&#xd;
+        &quot;weight&quot;: {&#xd;
+            &quot;value&quot;: 1,&#xd;
+            &quot;unit&quot;: &quot;kilograms&quot;&#xd;
+        },&#xd;
+        &quot;lineItems&quot;: [&#xd;
+            {&#xd;
+     	     &quot;id&quot;: &quot;15153643356453&quot;,&#xd;
+	          &quot;numberOfUnits&quot;: 1,&#xd;
+            	&quot;merchantSku&quot;: &quot;44295162102053&quot;&#xd;
+        	  }&#xd;
+        ]&#xd;
+    }&#xd;
+}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <stringProp name="HTTPSampler.domain">${aws_host}</stringProp>
+          <stringProp name="HTTPSampler.protocol">https</stringProp>
+          <stringProp name="HTTPSampler.path">/prod/v1/orders/cf2a5fb0-260d-4537-b47f-2e50cdd9bb16/packages/id?marketplaceName=SHOPIFY_IN&amp;channelName=SHOPIFY</stringProp>
+          <stringProp name="HTTPSampler.method">PUT</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+          <boolProp name="HTTPSampler.BROWSER_COMPATIBLE_MULTIPART">false</boolProp>
+          <boolProp name="HTTPSampler.image_parser">false</boolProp>
+          <boolProp name="HTTPSampler.concurrentDwn">false</boolProp>
+          <stringProp name="HTTPSampler.concurrentPool">6</stringProp>
+          <boolProp name="HTTPSampler.md5">false</boolProp>
+          <intProp name="HTTPSampler.ipSourceType">0</intProp>
+        </HTTPSamplerProxy>
+        <hashTree/>
+        <ResultCollector guiclass="StatVisualizer" testclass="ResultCollector" testname="Aggregate Report" enabled="true">
+          <boolProp name="ResultCollector.error_logging">false</boolProp>
+          <objProp>
+            <name>saveConfig</name>
+            <value class="SampleSaveConfiguration">
+              <time>true</time>
+              <latency>true</latency>
+              <timestamp>true</timestamp>
+              <success>true</success>
+              <label>true</label>
+              <code>true</code>
+              <message>true</message>
+              <threadName>true</threadName>
+              <dataType>true</dataType>
+              <encoding>false</encoding>
+              <assertions>true</assertions>
+              <subresults>true</subresults>
+              <responseData>false</responseData>
+              <samplerData>false</samplerData>
+              <xml>false</xml>
+              <fieldNames>true</fieldNames>
+              <responseHeaders>false</responseHeaders>
+              <requestHeaders>false</requestHeaders>
+              <responseDataOnError>false</responseDataOnError>
+              <saveAssertionResultsFailureMessage>true</saveAssertionResultsFailureMessage>
+              <assertionsResultsToSave>0</assertionsResultsToSave>
+              <bytes>true</bytes>
+              <sentBytes>true</sentBytes>
+              <url>true</url>
+              <threadCounts>true</threadCounts>
+              <idleTime>true</idleTime>
+              <connectTime>true</connectTime>
+            </value>
+          </objProp>
+          <stringProp name="filename"></stringProp>
+        </ResultCollector>
+        <hashTree/>
+        <ResultCollector guiclass="TableVisualizer" testclass="ResultCollector" testname="View Results in Table" enabled="true">
+          <boolProp name="ResultCollector.error_logging">false</boolProp>
+          <objProp>
+            <name>saveConfig</name>
+            <value class="SampleSaveConfiguration">
+              <time>true</time>
+              <latency>true</latency>
+              <timestamp>true</timestamp>
+              <success>true</success>
+              <label>true</label>
+              <code>true</code>
+              <message>true</message>
+              <threadName>true</threadName>
+              <dataType>true</dataType>
+              <encoding>true</encoding>
+              <assertions>true</assertions>
+              <subresults>true</subresults>
+              <responseData>true</responseData>
+              <samplerData>true</samplerData>
+              <xml>true</xml>
+              <fieldNames>true</fieldNames>
+              <responseHeaders>true</responseHeaders>
+              <requestHeaders>true</requestHeaders>
+              <responseDataOnError>false</responseDataOnError>
+              <saveAssertionResultsFailureMessage>true</saveAssertionResultsFailureMessage>
+              <assertionsResultsToSave>0</assertionsResultsToSave>
+              <bytes>true</bytes>
+              <sentBytes>true</sentBytes>
+              <url>true</url>
+              <fileName>true</fileName>
+              <hostname>true</hostname>
+              <threadCounts>true</threadCounts>
+              <sampleCount>true</sampleCount>
+              <idleTime>true</idleTime>
+              <connectTime>true</connectTime>
+            </value>
+          </objProp>
+          <stringProp name="filename"></stringProp>
+        </ResultCollector>
+        <hashTree/>
+        <ResultCollector guiclass="SummaryReport" testclass="ResultCollector" testname="Summary Report" enabled="true">
+          <boolProp name="ResultCollector.error_logging">false</boolProp>
+          <objProp>
+            <name>saveConfig</name>
+            <value class="SampleSaveConfiguration">
+              <time>true</time>
+              <latency>true</latency>
+              <timestamp>true</timestamp>
+              <success>true</success>
+              <label>true</label>
+              <code>true</code>
+              <message>true</message>
+              <threadName>true</threadName>
+              <dataType>true</dataType>
+              <encoding>false</encoding>
+              <assertions>true</assertions>
+              <subresults>true</subresults>
+              <responseData>false</responseData>
+              <samplerData>false</samplerData>
+              <xml>false</xml>
+              <fieldNames>true</fieldNames>
+              <responseHeaders>false</responseHeaders>
+              <requestHeaders>false</requestHeaders>
+              <responseDataOnError>false</responseDataOnError>
+              <saveAssertionResultsFailureMessage>true</saveAssertionResultsFailureMessage>
+              <assertionsResultsToSave>0</assertionsResultsToSave>
+              <bytes>true</bytes>
+              <sentBytes>true</sentBytes>
+              <url>true</url>
+              <threadCounts>true</threadCounts>
+              <idleTime>true</idleTime>
+              <connectTime>true</connectTime>
+            </value>
+          </objProp>
+          <stringProp name="filename"></stringProp>
+        </ResultCollector>
+        <hashTree/>
+      </hashTree>
+    </hashTree>
+  </hashTree>
+</jmeterTestPlan>
