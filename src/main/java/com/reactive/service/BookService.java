@@ -7,18 +7,18 @@ import reactor.core.publisher.Mono;
 import java.util.List;
 
 public interface BookService {
-    Mono<Book> create(Book book);
+//    Mono<Book> create(Book book);
 
     List<Book> getAll();
 
-    Flux<Book> getAllReactive();
+//    Flux<Book> getAllReactive();
 
 
-    Mono<Book> get(int bookId);
+//    Mono<Book> get(int bookId);
 
-    Mono<Book> update(Book book, int bookId);
+//    Mono<Book> update(Book book, int bookId);
 
-    Mono<Void> delete(int bookId);
+//    Mono<Void> delete(int bookId);
 
-    Flux<Book> search(String query);
+//    Flux<Book> search(String query);
 }
